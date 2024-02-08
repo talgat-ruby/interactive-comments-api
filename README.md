@@ -138,6 +138,20 @@ curl 'http://localhost:8081/api/v1/comments?user=amyrobson'
 }
 ```
 
+Sample Error Response for
+
+```bash
+curl 'http://localhost:8081/api/v1/comments?user=amyrobson'
+```
+
+```json
+{
+  "error": {
+    "message": "smth went wrong"
+  }
+}
+```
+
 Rest are comming soon ....
 
 ## License
