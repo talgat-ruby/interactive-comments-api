@@ -12,7 +12,6 @@ LABEL maintainer="Talgat Saribayev <talgat.s@protonmail.com>"
 
 WORKDIR /app
 COPY --from=builder /app/api api
-COPY --from=builder /app/docs docs
 COPY --from=builder /app/database.db database.db
 
 ENV PORT 80
