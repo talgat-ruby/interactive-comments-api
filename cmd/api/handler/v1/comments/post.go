@@ -2,7 +2,6 @@ package comments
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
@@ -18,9 +17,9 @@ type PostRequestQuery struct {
 }
 
 type PostRequestBody struct {
-	ParentID *int   `xml:"parentId" json:"parentId,omitempty" form:"parentId" validate:"omitempty,gt=0"`
-	ReplyID  *int   `xml:"replyId" json:"replyId,omitempty" form:"replyId" validate:"required_with=ParentID,omitempty,gt=0"`
-	Content  string `xml:"content" json:"content" form:"content" validate:"required"`
+	ParentID  *int    `xml:"parentId" json:"parentId,omitempty" form:"parentId" validate:"omitempty,gt=0"`
+	Addressee *string `xml:"addressee" json:"addressee,omitempty" form:"addressee" validate:"required_with=ParentID,omitempty,gt=0"`
+	Content   string  `xml:"content" json:"content" form:"content" validate:"required"`
 }
 
 func (h *Handler) Add(c echo.Context) error {
@@ -43,9 +42,6 @@ func (h *Handler) Add(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, response.ErrorWithMessage{Error: response.WithMessage{Message: err.Error()}})
 	}
 
-	fmt.Printf("%+v\n", reqQuery)
-	fmt.Printf("%+v\n", reqBody)
-
 	if validationError := h.postRequestValidationErrors(ctx, reqBody); validationError != nil {
 		h.log.ErrorContext(
 			ctx,
@@ -56,7 +52,7 @@ func (h *Handler) Add(c echo.Context) error {
 	}
 
 	dbInput := postDBInput(reqBody, reqQuery.User)
-	if err := h.db.InsertComment(ctx, dbInput); err != nil {
+	if err := h.db.CreateComment(ctx, dbInput); err != nil {
 		h.log.ErrorContext(
 			ctx,
 			"fail Add:: db add fail",
@@ -71,9 +67,9 @@ func (h *Handler) Add(c echo.Context) error {
 }
 
 type validationError struct {
-	ParentID *string `json:"parentId,omitempty"`
-	ReplyID  *string `json:"replyId,omitempty"`
-	Content  *string `json:"content,omitempty"`
+	Content   *string `json:"content,omitempty"`
+	ParentID  *string `json:"parentId,omitempty"`
+	Addressee *string `json:"addressee,omitempty"`
 }
 
 func (h *Handler) postRequestBody(_ context.Context, c echo.Context) (*PostRequestBody, error) {
@@ -94,7 +90,7 @@ func (h *Handler) postRequestValidationErrors(_ context.Context, reqBody *PostRe
 			case "ParentID":
 				vErr.ParentID = utils.ToPtr("parentId is invalid")
 			case "ReplyID":
-				vErr.ReplyID = utils.ToPtr("replyId is invalid, is required if parentId presented")
+				vErr.Addressee = utils.ToPtr("addressee is invalid, is required if parentId presented")
 			case "Content":
 				vErr.Content = utils.ToPtr("content is required")
 			}
@@ -106,17 +102,17 @@ func (h *Handler) postRequestValidationErrors(_ context.Context, reqBody *PostRe
 	return nil
 }
 
-func postDBInput(reqBody *PostRequestBody, username *string) model.InsertCommentInput {
-	var inp model.InsertCommentInput
+func postDBInput(reqBody *PostRequestBody, username *string) *model.CreateCommentInput {
+	inp := new(model.CreateCommentInput)
 
 	if reqBody == nil {
 		return inp
 	}
 
-	inp.ParentID = reqBody.ParentID
-	inp.ReplyID = reqBody.ReplyID
 	inp.Author = username
 	inp.Content = reqBody.Content
+	inp.ParentID = reqBody.ParentID
+	inp.Addressee = reqBody.Addressee
 
 	return inp
 }

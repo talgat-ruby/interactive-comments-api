@@ -8,5 +8,5 @@ import (
 
 type DB interface {
 	ReadComments(ctx context.Context, username string) ([]*model.Comment, error)
-	InsertComment(ctx context.Context, input model.InsertCommentInput) error
+	CreateComment(ctx context.Context, input *model.CreateCommentInput) error
 }

@@ -2,6 +2,8 @@ package model
 
 import (
 	"context"
+
+	"github.com/talgat-ruby/interactive-comments-api/pkg/utils"
 )
 
 type DBComment struct {
@@ -66,9 +68,7 @@ func (m *Model) getParentCommentsId(ctx context.Context, username string) ([]*in
 	sqlStatement := `
 		SELECT c.OID
 		FROM main.comment c
-		LEFT JOIN main.reply r on c.OID = r.comment_id
-		WHERE r.comment_id IS NULL
-		ORDER BY c.OID
+		WHERE c.parent_id IS NULL
 	`
 
 	rows, err := m.db.QueryContext(ctx, sqlStatement)
@@ -101,8 +101,10 @@ func (m *Model) getComments(ctx context.Context, username string, pIds []*int) (
 
 	sqlStatement := `
 		SELECT
-			c.OID as id,
+			c.id as id,
 			c.content as content,
+			c.author as author,
+			c.addressee as addressee,
 			CASE
 				WHEN (strftime('%Y', 'now') - strftime('%Y', c.created_at)) > 0
 					THEN 'More than ' || (strftime('%Y', 'now') - strftime('%Y', c.created_at)) || ' year(s) ago'
@@ -118,10 +120,8 @@ func (m *Model) getComments(ctx context.Context, username string, pIds []*int) (
 					THEN 'More than ' || (strftime('%S', 'now') - strftime('%S', c.created_at)) || ' second(s) ago'
 				ELSE 'now'
 			END AS duration,
-			u.username as author,
 			u.avatar_url as avatar_url,
 			u.username == ? as is_mine,
-			r.addressee as addressee,
 			pc.OID as parent_id,
 			CASE
 				WHEN l.count is NULL THEN 0
@@ -133,8 +133,7 @@ func (m *Model) getComments(ctx context.Context, username string, pIds []*int) (
 			END AS my_rate
 		FROM main.comment c
 		LEFT JOIN main.user_ u ON c.author = u.username
-		LEFT JOIN main.reply r ON c.OID = r.comment_id
-		LEFT JOIN main.comment pc ON r.parent_id = pc.OID
+		LEFT JOIN main.comment pc ON c.parent_id = pc.OID
 		LEFT JOIN
 			(
 				SELECT
@@ -165,13 +164,14 @@ func (m *Model) getComments(ctx context.Context, username string, pIds []*int) (
 	for rows.Next() {
 		c := new(DBComment)
 
-		if err = rows.Scan(&c.ID,
+		if err = rows.Scan(
+			&c.ID,
 			&c.Content,
-			&c.Duration,
 			&c.Author,
+			&c.Addressee,
+			&c.Duration,
 			&c.AvatarUrl,
 			&c.IsMine,
-			&c.Addressee,
 			&c.ParentID,
 			&c.Likes,
 			&c.MyRate,
@@ -240,14 +240,46 @@ func (m *Model) getComments(ctx context.Context, username string, pIds []*int) (
 	return comments, nil
 }
 
-type InsertCommentInput struct {
-	Author   *string
-	ParentID *int
-	ReplyID  *int
-	Content  string
+type CreateCommentInput struct {
+	Author    *string
+	Content   string
+	ParentID  *int
+	Addressee *string
 }
 
-func (m *Model) InsertComment(ctx context.Context, input InsertCommentInput) error {
+func (m *Model) CreateComment(ctx context.Context, input *CreateCommentInput) error {
+	m.log.InfoContext(ctx, "start InsertComment")
+
+	insertInp := &insertComment{
+		author:  input.Author,
+		content: input.Content,
+	}
+
+	id, err := m.insertComment(ctx, insertInp)
+	if err != nil {
+		return err
+	}
+
+	if input.ParentID != nil && input.Addressee != nil {
+		replyInp := &insertReply{
+			commentID: id,
+			parentID:  input.ParentID,
+			addressee: input.Addressee,
+		}
+		if err := m.insertReply(ctx, replyInp); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+type insertComment struct {
+	author  *string
+	content string
+}
+
+func (m *Model) insertComment(ctx context.Context, input *insertComment) (*int, error) {
 	m.log.InfoContext(ctx, "start InsertComment")
 
 	sqlStatement := `
@@ -255,13 +287,46 @@ func (m *Model) InsertComment(ctx context.Context, input InsertCommentInput) err
 		VALUES (?, ?);
 	`
 
+	res, err := m.db.ExecContext(
+		ctx,
+		sqlStatement,
+		input.author,
+		input.content,
+	)
+	if err != nil {
+		m.log.ErrorContext(ctx, "fail InsertComment", "error", err)
+		return nil, err
+	}
+
+	id64, err := res.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+
+	m.log.InfoContext(ctx, "success InsertComment")
+	return utils.ToPtr(int(id64)), nil
+}
+
+type insertReply struct {
+	commentID *int
+	parentID  *int
+	addressee *string
+}
+
+func (m *Model) insertReply(ctx context.Context, input *insertReply) error {
+	m.log.InfoContext(ctx, "start InsertComment")
+
+	sqlStatement := `
+		INSERT INTO reply (comment_id, parent_id, addressee)
+		VALUES (?, ?, ?);
+	`
+
 	if _, err := m.db.ExecContext(
 		ctx,
 		sqlStatement,
-		input.ParentID,
-		input.ReplyID,
-		input.Author,
-		input.Content,
+		input.commentID,
+		input.parentID,
+		input.addressee,
 	); err != nil {
 		m.log.ErrorContext(ctx, "fail InsertComment", "error", err)
 		return err
