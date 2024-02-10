@@ -7,7 +7,12 @@ import (
 
 func New(isLocal bool) *slog.Logger {
 	if isLocal {
-		return slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+		opts := &slog.HandlerOptions{
+			Level:     slog.LevelDebug,
+			AddSource: true,
+		}
+		return slog.New(slog.NewTextHandler(os.Stdout, opts))
 	}
 
 	return slog.New(slog.NewJSONHandler(os.Stdout, nil))

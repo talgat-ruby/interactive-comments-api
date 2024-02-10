@@ -4,16 +4,29 @@ import (
 	"context"
 )
 
-type CommentReply struct {
-	ID          int
-	Content     string
-	Author      string
-	AvatarUrl   string
-	Likes       int
-	Duration    string
-	IsMine      bool
-	MyRate      int
-	ReplyAuthor string
+type DBComment struct {
+	ID        int
+	Content   string
+	Author    string
+	AvatarUrl string
+	Likes     int
+	Duration  string
+	IsMine    bool
+	MyRate    int
+	ParentID  *int
+	Addressee *string
+}
+
+type Reply struct {
+	ID        int
+	Content   string
+	Author    string
+	AvatarUrl string
+	Likes     int
+	Duration  string
+	IsMine    bool
+	MyRate    int
+	Addressee string
 }
 
 type Comment struct {
@@ -25,125 +38,71 @@ type Comment struct {
 	Duration  string
 	IsMine    bool
 	MyRate    int
-	Replies   []*CommentReply
+	Replies   []*Reply
 }
 
-func (m *Model) GetComments(ctx context.Context, username string) ([]*Comment, error) {
-	m.log.InfoContext(ctx, "start GetList")
+func (m *Model) ReadComments(ctx context.Context, username string) ([]*Comment, error) {
+	m.log.InfoContext(ctx, "start ReadComments")
 
-	comments, err := m.getComments(ctx, username)
+	parentIds, err := m.getParentCommentsId(ctx, username)
 	if err != nil {
-		m.log.ErrorContext(ctx, "fail GetList", "error", err)
+		m.log.ErrorContext(ctx, "fail ReadComments", "error", err)
 		return nil, err
 	}
 
-	comments, err = m.getCommentsReplies(ctx, username, comments)
+	comments, err := m.getComments(ctx, username, parentIds)
 	if err != nil {
-		m.log.ErrorContext(ctx, "fail GetList", "error", err)
+		m.log.ErrorContext(ctx, "fail ReadComments", "error", err)
 		return nil, err
 	}
 
-	m.log.InfoContext(ctx, "success GetList")
+	m.log.InfoContext(ctx, "success ReadComments")
 	return comments, nil
 }
 
-func (m *Model) getComments(ctx context.Context, username string) ([]*Comment, error) {
+func (m *Model) getParentCommentsId(ctx context.Context, username string) ([]*int, error) {
+	m.log.InfoContext(ctx, "start getParentCommentsId")
+
+	sqlStatement := `
+		SELECT c.OID
+		FROM main.comment c
+		LEFT JOIN main.reply r on c.OID = r.comment_id
+		WHERE r.comment_id IS NULL
+		ORDER BY c.OID
+	`
+
+	rows, err := m.db.QueryContext(ctx, sqlStatement)
+	if err != nil {
+		m.log.ErrorContext(ctx, "fail getParentCommentsId", "error", err)
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	ids := make([]*int, 0)
+
+	for rows.Next() {
+		id := new(int)
+
+		if err = rows.Scan(&id); err != nil {
+			m.log.ErrorContext(ctx, "fail getParentCommentsId", "error", err)
+			return nil, err
+		}
+
+		ids = append(ids, id)
+	}
+
+	m.log.InfoContext(ctx, "success getParentCommentsId")
+	return ids, nil
+}
+
+func (m *Model) getComments(ctx context.Context, username string, pIds []*int) ([]*Comment, error) {
 	m.log.InfoContext(ctx, "start getComments")
 
 	sqlStatement := `
 		SELECT
 			c.OID as id,
 			c.content as content,
-			u.username as author ,
-			u.avatar_url as avatar_url,
-			CASE
-				WHEN l.count is NULL THEN 0
-				ELSE l.count
-				END AS likes,
-			CASE
-				WHEN (strftime('%Y', 'now') - strftime('%Y', c.created_at)) > 0
-					THEN 'More than ' || (strftime('%Y', 'now') - strftime('%Y', c.created_at)) || ' year(s) ago'
-				WHEN (strftime('%m', 'now') - strftime('%m', c.created_at)) > 0
-					THEN 'More than ' || (strftime('%m', 'now') - strftime('%m', c.created_at)) || ' month(s) ago'
-				WHEN (strftime('%d', 'now') - strftime('%d', c.created_at)) > 0
-					THEN 'More than ' || (strftime('%d', 'now') - strftime('%d', c.created_at)) || ' day(s) ago'
-				WHEN (strftime('%H', 'now') - strftime('%H', c.created_at)) > 0
-					THEN 'More than ' || (strftime('%H', 'now') - strftime('%H', c.created_at)) || ' hour(s) ago'
-				WHEN (strftime('%M', 'now') - strftime('%M', c.created_at)) > 0
-					THEN 'More than ' || (strftime('%M', 'now') - strftime('%M', c.created_at)) || ' minute(s) ago'
-				WHEN (strftime('%S', 'now') - strftime('%S', c.created_at)) > 0
-					THEN 'More than ' || (strftime('%S', 'now') - strftime('%S', c.created_at)) || ' second(s) ago'
-				ELSE 'now'
-				END AS duration,
-			u.username == ? as is_mine,
-			CASE
-				WHEN l2.rate is NULL THEN 0
-				ELSE l2.rate
-				END AS my_rate
-		FROM
-			comment as c
-				LEFT JOIN
-			main.user_ u
-			ON
-				c.author = u.username
-				LEFT JOIN
-			(
-				SELECT
-					comment_id,
-					SUM(rate) as count
-				FROM
-					like_
-				GROUP BY
-					comment_id
-			) as l
-			ON
-				c.OID = l.comment_id
-				LEFT JOIN
-			like_ l2
-			ON
-				c.OID = l2.comment_id AND l2.author = ?
-		WHERE c.parent_id IS NULL
-		ORDER BY c.OID;
-	`
-
-	rows, err := m.db.Query(sqlStatement, username, username)
-	if err != nil {
-		m.log.ErrorContext(ctx, "fail getComments", "error", err)
-		return nil, err
-	}
-
-	defer rows.Close()
-
-	comments := make([]*Comment, 0)
-
-	for rows.Next() {
-		c := new(Comment)
-
-		if err = rows.Scan(&c.ID, &c.Content, &c.Author, &c.AvatarUrl, &c.Likes, &c.Duration, &c.IsMine, &c.MyRate); err != nil {
-			m.log.ErrorContext(ctx, "fail getComments", "error", err)
-			return nil, err
-		}
-
-		comments = append(comments, c)
-	}
-
-	m.log.InfoContext(ctx, "success getComments")
-	return comments, nil
-}
-
-func (m *Model) getCommentsReplies(ctx context.Context, username string, cs []*Comment) ([]*Comment, error) {
-	m.log.InfoContext(ctx, "start getCommentsReplies")
-
-	sqlStatement := `
-		SELECT
-			c.id as id,
-			c.content as content,
-			u.username as author ,
-			u.avatar_url as avatar_url,
-			CASE
-				WHEN l.count is NULL THEN 0
-				ELSE l.count
-			END AS likes,
 			CASE
 				WHEN (strftime('%Y', 'now') - strftime('%Y', c.created_at)) > 0
 					THEN 'More than ' || (strftime('%Y', 'now') - strftime('%Y', c.created_at)) || ' year(s) ago'
@@ -159,33 +118,24 @@ func (m *Model) getCommentsReplies(ctx context.Context, username string, cs []*C
 					THEN 'More than ' || (strftime('%S', 'now') - strftime('%S', c.created_at)) || ' second(s) ago'
 				ELSE 'now'
 			END AS duration,
-		    u.username == ? as is_mine,
+			u.username as author,
+			u.avatar_url as avatar_url,
+			u.username == ? as is_mine,
+			r.addressee as addressee,
+			pc.OID as parent_id,
+			CASE
+				WHEN l.count is NULL THEN 0
+				ELSE l.count
+			END AS likes,
 			CASE
 				WHEN l2.rate is NULL THEN 0
 				ELSE l2.rate
-				END AS my_rate,
-		    r.author as reply_author
-		FROM
-			(
-				SELECT
-					OID as id,
-					reply_id,
-					author,
-					content,
-					created_at,
-					parent_id
-				FROM comment
-				WHERE parent_id == ?
-			) as c
-				LEFT JOIN
-			main.comment r
-			ON
-				c.reply_id = r.OID
-				LEFT JOIN
-			main.user_ u
-			ON
-				c.author = u.username
-				LEFT JOIN
+			END AS my_rate
+		FROM main.comment c
+		LEFT JOIN main.user_ u ON c.author = u.username
+		LEFT JOIN main.reply r ON c.OID = r.comment_id
+		LEFT JOIN main.comment pc ON r.parent_id = pc.OID
+		LEFT JOIN
 			(
 				SELECT
 					comment_id,
@@ -196,45 +146,127 @@ func (m *Model) getCommentsReplies(ctx context.Context, username string, cs []*C
 					comment_id
 			) as l
 			ON
-				c.id = l.comment_id
+				c.OID = l.comment_id
 				LEFT JOIN
 			like_ l2
 			ON
-				c.id = l2.comment_id AND l2.author = ?
-		ORDER BY c.id;
+				c.OID == l2.comment_id AND l2.author == ?
+		ORDER BY c.created_at DESC;
 	`
-	stm, err := m.db.Prepare(sqlStatement)
+	rows, err := m.db.QueryContext(ctx, sqlStatement, username, username)
 	if err != nil {
-		m.log.ErrorContext(ctx, "fail getCommentsReplies", "error", err)
+		m.log.ErrorContext(ctx, "fail getComments", "error", err)
 		return nil, err
 	}
-	defer stm.Close()
+	defer rows.Close()
 
-	for _, c := range cs {
-		rows, err := stm.Query(username, c.ID, username)
-		if err != nil {
-			m.log.ErrorContext(ctx, "fail getCommentsReplies", "error", err)
+	// NOTE: get all comments from db
+	dbComments := make([]*DBComment, 0)
+	for rows.Next() {
+		c := new(DBComment)
+
+		if err = rows.Scan(&c.ID,
+			&c.Content,
+			&c.Duration,
+			&c.Author,
+			&c.AvatarUrl,
+			&c.IsMine,
+			&c.Addressee,
+			&c.ParentID,
+			&c.Likes,
+			&c.MyRate,
+		); err != nil {
+			m.log.ErrorContext(ctx, "fail getComments", "error", err)
 			return nil, err
 		}
 
-		list := make([]*CommentReply, 0)
-
-		for rows.Next() {
-			c := new(CommentReply)
-
-			if err = rows.Scan(&c.ID, &c.Content, &c.Author, &c.AvatarUrl, &c.Likes, &c.Duration, &c.IsMine, &c.MyRate, &c.ReplyAuthor); err != nil {
-				m.log.ErrorContext(ctx, "fail getCommentsReplies", "error", err)
-				return nil, err
-			}
-
-			list = append(list, c)
-		}
-
-		c.Replies = list
-
-		rows.Close()
+		dbComments = append(dbComments, c)
 	}
 
-	m.log.InfoContext(ctx, "success getCommentsReplies")
-	return cs, nil
+	// NOTE: map parent ids to value
+	mIds := make(map[int]*Comment, len(pIds))
+	for _, id := range pIds {
+		if id != nil {
+			mIds[*id] = new(Comment)
+		}
+	}
+
+	for _, c := range dbComments {
+		if _, ok := mIds[c.ID]; ok {
+			mIds[c.ID] = &Comment{
+				ID:        c.ID,
+				Content:   c.Content,
+				Author:    c.Author,
+				AvatarUrl: c.AvatarUrl,
+				Likes:     c.Likes,
+				Duration:  c.Duration,
+				IsMine:    c.IsMine,
+				MyRate:    c.MyRate,
+				Replies:   make([]*Reply, 0),
+			}
+		}
+	}
+
+	// NOTE: append replies to comments
+	for _, c := range dbComments {
+		if c != nil && c.ParentID != nil {
+			if _, ok := mIds[*c.ParentID]; ok {
+				r := &Reply{
+					ID:        c.ID,
+					Content:   c.Content,
+					Author:    c.Author,
+					AvatarUrl: c.AvatarUrl,
+					Likes:     c.Likes,
+					Duration:  c.Duration,
+					IsMine:    c.IsMine,
+					MyRate:    c.MyRate,
+				}
+				if c.Addressee != nil {
+					r.Addressee = *c.Addressee
+				}
+				mIds[*c.ParentID].Replies = append(mIds[*c.ParentID].Replies, r)
+			}
+		}
+	}
+
+	comments := make([]*Comment, len(pIds), len(pIds))
+	for i, id := range pIds {
+		if id != nil {
+			comments[i] = mIds[*id]
+		}
+	}
+
+	m.log.InfoContext(ctx, "success getComments")
+	return comments, nil
+}
+
+type InsertCommentInput struct {
+	Author   *string
+	ParentID *int
+	ReplyID  *int
+	Content  string
+}
+
+func (m *Model) InsertComment(ctx context.Context, input InsertCommentInput) error {
+	m.log.InfoContext(ctx, "start InsertComment")
+
+	sqlStatement := `
+		INSERT INTO comment (author, content)
+		VALUES (?, ?);
+	`
+
+	if _, err := m.db.ExecContext(
+		ctx,
+		sqlStatement,
+		input.ParentID,
+		input.ReplyID,
+		input.Author,
+		input.Content,
+	); err != nil {
+		m.log.ErrorContext(ctx, "fail InsertComment", "error", err)
+		return err
+	}
+
+	m.log.InfoContext(ctx, "success InsertComment")
+	return nil
 }

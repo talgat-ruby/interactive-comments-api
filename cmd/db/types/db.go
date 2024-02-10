@@ -7,6 +7,6 @@ import (
 )
 
 type DB interface {
-	AddForm(ctx context.Context, input model.Form) error
-	GetComments(ctx context.Context, username string) ([]*model.Comment, error)
+	ReadComments(ctx context.Context, username string) ([]*model.Comment, error)
+	InsertComment(ctx context.Context, input model.InsertCommentInput) error
 }

@@ -15,7 +15,7 @@ type Model struct {
 }
 
 func New(log *slog.Logger, conf *configs.DBConfig) (*Model, error) {
-	db, err := database.NewDB("./database.db")
+	db, err := database.NewDB("./database.db?_foreign_keys=on")
 	if err != nil {
 		return nil, err
 	}

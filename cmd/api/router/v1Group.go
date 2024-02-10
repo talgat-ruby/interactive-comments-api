@@ -20,4 +20,5 @@ func v1formsRouter(v1 *echo.Group, db dbT.DB, v *validator.Validate, l *slog.Log
 	h := comments.New(db, v, l)
 
 	v1.GET("/comments", h.ReadList)
+	v1.POST("/comments", h.Add)
 }
