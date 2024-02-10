@@ -152,6 +152,161 @@ curl 'http://localhost:8081/api/v1/comments?user=amyrobson'
 }
 ```
 
+`POST` `/comments?user=<username>` 
+
+Body
+
+```json
+{
+  "content": <string>, // required
+  "parentId": <number>, // optional, valid comment id which has not parrent
+  "addressee": <string> // optional, valid username of replied message. If parentId exist than addressee must be too
+}
+```
+
+**Response**
+
+Sample Success Response for
+
+```bash
+curl -X POST 'http://localhost:8081/api/v1/comments?user=amyrobson' \
+    -H 'Content-Type: application/json' \
+    -d '{"content": "321", "addressee": "juliusomo", "parentId": 5}'
+```
+
+`204 No Content`
+
+Sample Error Response for
+
+```bash
+curl -X POST 'http://localhost:8081/api/v1/comments?user=amyrobson' \
+    -H 'Content-Type: application/json' \
+    -d '{"content": "", "addressee": "juliusomo"}'
+```
+
+`400`
+
+```json
+{
+  "error": {
+    "message":"content is required"
+  }
+}
+```
+
+**OR**
+
+```bash
+curl -X POST 'http://localhost:8081/api/v1/comments' \
+   -H 'Content-Type: application/json' \
+    -d '{"content": "321", "addressee": "juliusomo", "parentId": 5}'
+```
+
+`400`
+
+```json
+{
+  "error": 
+    {
+      "message":"user is invalid"
+    }
+}
+```
+
+`PATCH` `/comments/<id>?user=<username>`
+
+Body
+
+```json
+{
+  "content": <string> // required
+}
+```
+
+Only owner of a comment can update the comment.
+
+**Response**
+
+Sample Success Response for
+
+```bash
+curl -X PATCH 'http://localhost:8081/api/v1/comments/5?user=amyrobson' \
+    -H 'Content-Type: application/json' \
+    -d '{"content": "updated from curl"}'
+```
+
+`204 No Content`
+
+Sample Error Response for
+
+```bash
+curl -X PATCH 'http://localhost:8081/api/v1/comments/5?user=juliusomo' \
+   -H 'Content-Type: application/json' \
+   -d '{"content": "updated from curl"}'
+```
+
+When user does not own comment.
+
+`400`
+
+```json
+{
+  "error": {
+    "message":"no record was update, please verify request"
+  }
+}
+```
+
+`DELETE` `/comments/<id>?user=<username>`
+
+Only owner of a comment can delete the comment.
+
+**Response**
+
+Sample Success Response for
+
+```bash
+curl -X DELETE 'http://localhost:8081/api/v1/comments/1?user=amyrobson'
+```
+
+`204 No Content`
+
+Sample Error Response for
+
+```bash
+curl -X DELETE 'http://localhost:8081/api/v1/comments/0?user=amyrobson'
+```
+
+When comment id is invalid.
+
+`400`
+
+```json
+{
+  "error": {
+    "message":"id is invalid"
+  }
+}
+```
+
+**OR**
+
+```bash
+curl -X DELETE 'http://localhost:8081/api/v1/comments/1?user=amyrobson'
+```
+
+When comment was deleted by NOT owner.
+
+`400`
+
+```json
+{
+  "error": {
+    "message":"FOREIGN KEY constraint failed"
+  }
+}
+```
+
 Rest are comming soon ....
 
 ## License

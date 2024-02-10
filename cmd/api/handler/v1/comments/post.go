@@ -2,6 +2,7 @@ package comments
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/talgat-ruby/interactive-comments-api/cmd/db/model"
 	"github.com/talgat-ruby/interactive-comments-api/internal/response"
-	"github.com/talgat-ruby/interactive-comments-api/pkg/utils"
 )
 
 type PostRequestQuery struct {
@@ -37,13 +37,13 @@ func (h *Handler) Add(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, response.ErrorWithMessage{Error: response.WithMessage{Message: err.Error()}})
 	}
 
-	if validationError := h.postRequestQueryValidationErrors(ctx, reqQuery); validationError != nil {
+	if err := h.postRequestQueryValidationErrors(ctx, reqQuery); err != nil {
 		h.log.ErrorContext(
 			ctx,
 			"fail Delete:: validation errors",
 			"path", c.Path(),
 		)
-		return c.JSON(http.StatusBadRequest, response.Error{Error: validationError})
+		return c.JSON(http.StatusBadRequest, response.ErrorWithMessage{Error: response.WithMessage{Message: err.Error()}})
 	}
 
 	reqBody, err := h.postRequestBody(ctx, c)
@@ -57,13 +57,13 @@ func (h *Handler) Add(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, response.ErrorWithMessage{Error: response.WithMessage{Message: err.Error()}})
 	}
 
-	if validationError := h.postRequestValidationErrors(ctx, reqBody); validationError != nil {
+	if err := h.postRequestValidationErrors(ctx, reqBody); err != nil {
 		h.log.ErrorContext(
 			ctx,
 			"fail Add:: validation errors",
 			"path", c.Path(),
 		)
-		return c.JSON(http.StatusBadRequest, response.Error{Error: validationError})
+		return c.JSON(http.StatusBadRequest, response.ErrorWithMessage{Error: response.WithMessage{Message: err.Error()}})
 	}
 
 	dbInput := postDBInput(reqBody, reqQuery.User)
@@ -81,31 +81,19 @@ func (h *Handler) Add(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-type postQueryValidationError struct {
-	User *string `json:"user,omitempty"`
-}
-
-func (h *Handler) postRequestQueryValidationErrors(_ context.Context, reqParam *PostRequestQuery) *deleteQueryValidationError {
+func (h *Handler) postRequestQueryValidationErrors(_ context.Context, reqParam *PostRequestQuery) error {
 	if err := h.validate.Struct(reqParam); err != nil {
-		vErr := new(deleteQueryValidationError)
-
 		for _, err := range err.(validator.ValidationErrors) {
 			switch err.StructField() {
 			case "User":
-				vErr.User = utils.ToPtr("user is invalid")
+				return fmt.Errorf("user is invalid")
 			}
 		}
 
-		return vErr
+		return err
 	}
 
 	return nil
-}
-
-type postValidationError struct {
-	Content   *string `json:"content,omitempty"`
-	ParentID  *string `json:"parentId,omitempty"`
-	Addressee *string `json:"addressee,omitempty"`
 }
 
 func (h *Handler) postRequestBody(_ context.Context, c echo.Context) (*PostRequestBody, error) {
@@ -117,22 +105,20 @@ func (h *Handler) postRequestBody(_ context.Context, c echo.Context) (*PostReque
 	return reqBody, nil
 }
 
-func (h *Handler) postRequestValidationErrors(_ context.Context, reqBody *PostRequestBody) *postValidationError {
+func (h *Handler) postRequestValidationErrors(_ context.Context, reqBody *PostRequestBody) error {
 	if err := h.validate.Struct(reqBody); err != nil {
-		vErr := new(postValidationError)
-
 		for _, err := range err.(validator.ValidationErrors) {
 			switch err.StructField() {
 			case "ParentID":
-				vErr.ParentID = utils.ToPtr("parentId is invalid")
+				return fmt.Errorf("parentId is invalid")
 			case "ReplyID":
-				vErr.Addressee = utils.ToPtr("addressee is invalid, is required if parentId presented")
+				return fmt.Errorf("addressee is invalid, is required if parentId presented")
 			case "Content":
-				vErr.Content = utils.ToPtr("content is required")
+				return fmt.Errorf("content is required")
 			}
 		}
 
-		return vErr
+		return err
 	}
 
 	return nil

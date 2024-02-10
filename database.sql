@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS comment (
     addressee TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (author) REFERENCES user_ (username),
+    FOREIGN KEY (author) REFERENCES user_ (username) ON DELETE CASCADE,
     FOREIGN KEY (parent_id) REFERENCES comment (id) ON DELETE CASCADE,
     FOREIGN KEY (addressee) REFERENCES user_ (username) ON DELETE SET NULL
 );
@@ -24,8 +24,8 @@ CREATE TABLE IF NOT EXISTS like_ (
     comment_id INTEGER NOT NULL,
     rate INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (author) REFERENCES user_ (username),
-    FOREIGN KEY (comment_id) REFERENCES comment (id),
+    FOREIGN KEY (author) REFERENCES user_ (username) ON DELETE CASCADE,
+    FOREIGN KEY (comment_id) REFERENCES comment (id) ON DELETE CASCADE,
     UNIQUE(author, comment_id)
 );
 

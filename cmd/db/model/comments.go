@@ -333,8 +333,8 @@ func (m *Model) DeleteComment(ctx context.Context, input *DeleteCommentInput) er
 	res, err := m.db.ExecContext(
 		ctx,
 		sqlStatement,
-		input.ID,
-		input.Username,
+		*input.ID,
+		*input.Username,
 	)
 	if err != nil {
 		m.log.ErrorContext(ctx, "fail DeleteComment", "error", err)

@@ -2,6 +2,7 @@ package comments
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/talgat-ruby/interactive-comments-api/cmd/db/model"
 	"github.com/talgat-ruby/interactive-comments-api/internal/response"
-	"github.com/talgat-ruby/interactive-comments-api/pkg/utils"
 )
 
 type PatchRequestParam struct {
@@ -39,13 +39,13 @@ func (h *Handler) Edit(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, response.ErrorWithMessage{Error: response.WithMessage{Message: err.Error()}})
 	}
 
-	if validationError := h.patchRequestParamValidationErrors(ctx, reqParam); validationError != nil {
+	if err := h.patchRequestParamValidationErrors(ctx, reqParam); err != nil {
 		h.log.ErrorContext(
 			ctx,
 			"fail Delete:: validation errors",
 			"path", c.Path(),
 		)
-		return c.JSON(http.StatusBadRequest, response.Error{Error: validationError})
+		return c.JSON(http.StatusBadRequest, response.ErrorWithMessage{Error: response.WithMessage{Message: err.Error()}})
 	}
 
 	reqQuery := new(PatchRequestQuery)
@@ -59,13 +59,13 @@ func (h *Handler) Edit(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, response.ErrorWithMessage{Error: response.WithMessage{Message: err.Error()}})
 	}
 
-	if validationError := h.patchRequestQueryValidationErrors(ctx, reqQuery); validationError != nil {
+	if err := h.patchRequestQueryValidationErrors(ctx, reqQuery); err != nil {
 		h.log.ErrorContext(
 			ctx,
 			"fail Delete:: validation errors",
 			"path", c.Path(),
 		)
-		return c.JSON(http.StatusBadRequest, response.Error{Error: validationError})
+		return c.JSON(http.StatusBadRequest, response.ErrorWithMessage{Error: response.WithMessage{Message: err.Error()}})
 	}
 
 	reqBody, err := h.patchRequestBody(ctx, c)
@@ -79,13 +79,13 @@ func (h *Handler) Edit(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, response.ErrorWithMessage{Error: response.WithMessage{Message: err.Error()}})
 	}
 
-	if validationError := h.patchRequestValidationErrors(ctx, reqBody); validationError != nil {
+	if err := h.patchRequestValidationErrors(ctx, reqBody); err != nil {
 		h.log.ErrorContext(
 			ctx,
 			"fail Edit:: validation errors",
 			"path", c.Path(),
 		)
-		return c.JSON(http.StatusBadRequest, response.Error{Error: validationError})
+		return c.JSON(http.StatusBadRequest, response.ErrorWithMessage{Error: response.WithMessage{Message: err.Error()}})
 	}
 
 	dbInput := patchDBInput(reqBody, reqParam.ID, reqQuery.User)
@@ -103,50 +103,35 @@ func (h *Handler) Edit(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-type patchParamValidationError struct {
-	ID *string `json:"id,omitempty"`
-}
-
-func (h *Handler) patchRequestParamValidationErrors(_ context.Context, reqParam *PatchRequestParam) *patchParamValidationError {
+func (h *Handler) patchRequestParamValidationErrors(_ context.Context, reqParam *PatchRequestParam) error {
 	if err := h.validate.Struct(reqParam); err != nil {
-		vErr := new(patchParamValidationError)
-
 		for _, err := range err.(validator.ValidationErrors) {
 			switch err.StructField() {
 			case "ID":
-				vErr.ID = utils.ToPtr("id is invalid")
+				return fmt.Errorf("id is invalid")
 			}
 		}
 
-		return vErr
+		return err
 	}
 
 	return nil
 }
 
-type patchQueryValidationError struct {
-	User *string `json:"user,omitempty"`
-}
-
-func (h *Handler) patchRequestQueryValidationErrors(_ context.Context, reqParam *PatchRequestQuery) *patchQueryValidationError {
+func (h *Handler) patchRequestQueryValidationErrors(_ context.Context, reqParam *PatchRequestQuery) error {
 	if err := h.validate.Struct(reqParam); err != nil {
-		vErr := new(patchQueryValidationError)
 
 		for _, err := range err.(validator.ValidationErrors) {
 			switch err.StructField() {
 			case "User":
-				vErr.User = utils.ToPtr("user is invalid")
+				return fmt.Errorf("user is invalid")
 			}
 		}
 
-		return vErr
+		return err
 	}
 
 	return nil
-}
-
-type patchValidationError struct {
-	Content *string `json:"content,omitempty"`
 }
 
 func (h *Handler) patchRequestBody(_ context.Context, c echo.Context) (*PatchRequestBody, error) {
@@ -158,18 +143,16 @@ func (h *Handler) patchRequestBody(_ context.Context, c echo.Context) (*PatchReq
 	return reqBody, nil
 }
 
-func (h *Handler) patchRequestValidationErrors(_ context.Context, reqBody *PatchRequestBody) *patchValidationError {
+func (h *Handler) patchRequestValidationErrors(_ context.Context, reqBody *PatchRequestBody) error {
 	if err := h.validate.Struct(reqBody); err != nil {
-		vErr := new(patchValidationError)
-
 		for _, err := range err.(validator.ValidationErrors) {
 			switch err.StructField() {
 			case "Content":
-				vErr.Content = utils.ToPtr("content is required")
+				return fmt.Errorf("content is required")
 			}
 		}
 
-		return vErr
+		return err
 	}
 
 	return nil
