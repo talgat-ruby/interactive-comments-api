@@ -28,6 +28,12 @@ func (h *Handler) Add(c echo.Context) error {
 
 	reqQuery := new(PostRequestQuery)
 	if err := (&echo.DefaultBinder{}).BindQueryParams(c, reqQuery); err != nil {
+		h.log.ErrorContext(
+			ctx,
+			"fail Add:: body binding error",
+			"path", c.Path(),
+			"error", err,
+		)
 		return c.JSON(http.StatusBadRequest, response.ErrorWithMessage{Error: response.WithMessage{Message: err.Error()}})
 	}
 
@@ -66,7 +72,7 @@ func (h *Handler) Add(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-type validationError struct {
+type postValidationError struct {
 	Content   *string `json:"content,omitempty"`
 	ParentID  *string `json:"parentId,omitempty"`
 	Addressee *string `json:"addressee,omitempty"`
@@ -81,9 +87,9 @@ func (h *Handler) postRequestBody(_ context.Context, c echo.Context) (*PostReque
 	return reqBody, nil
 }
 
-func (h *Handler) postRequestValidationErrors(_ context.Context, reqBody *PostRequestBody) *validationError {
+func (h *Handler) postRequestValidationErrors(_ context.Context, reqBody *PostRequestBody) *postValidationError {
 	if err := h.validate.Struct(reqBody); err != nil {
-		vErr := new(validationError)
+		vErr := new(postValidationError)
 
 		for _, err := range err.(validator.ValidationErrors) {
 			switch err.StructField() {

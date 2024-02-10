@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"fmt"
 )
 
 type DBComment struct {
@@ -250,22 +251,65 @@ func (m *Model) CreateComment(ctx context.Context, input *CreateCommentInput) er
 
 	sqlStatement := `
 		INSERT INTO comment (author, content, parent_id, addressee)
-		VALUES (?, ?, ?, ?);
+		SELECT ?, ?, ?, ?
+		WHERE EXISTS (
+			SELECT * FROM comment c WHERE c.id = ? AND c.parent_id IS NULL
+		);
 	`
 
-	_, err := m.db.ExecContext(
+	res, err := m.db.ExecContext(
 		ctx,
 		sqlStatement,
 		input.Author,
 		input.Content,
 		input.ParentID,
 		input.Addressee,
+		input.ParentID,
 	)
 	if err != nil {
 		m.log.ErrorContext(ctx, "fail CreateComment", "error", err)
 		return err
 	}
 
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return fmt.Errorf("no record was inserted, please verify parent id")
+	}
+
 	m.log.InfoContext(ctx, "success CreateComment")
+	return nil
+}
+
+type DeleteCommentInput struct {
+	ID       int
+	Username string
+}
+
+func (m *Model) DeleteComment(ctx context.Context, input *DeleteCommentInput) error {
+	m.log.InfoContext(ctx, "start DeleteComment")
+
+	sqlStatement := `
+		DELETE FROM comment WHERE id == ? AND author == ?;
+	`
+
+	res, err := m.db.ExecContext(
+		ctx,
+		sqlStatement,
+		input.ID,
+		input.Username,
+	)
+	if err != nil {
+		m.log.ErrorContext(ctx, "fail DeleteComment", "error", err)
+		return err
+	}
+
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return fmt.Errorf("no record was deleted, please check you request")
+	}
+
+	m.log.InfoContext(ctx, "success DeleteComment")
 	return nil
 }

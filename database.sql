@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS like_ (
     rate INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (author) REFERENCES user_ (username),
-    FOREIGN KEY (comment_id) REFERENCES comment (OID),
+    FOREIGN KEY (comment_id) REFERENCES comment (id),
     UNIQUE(author, comment_id)
 );
 
