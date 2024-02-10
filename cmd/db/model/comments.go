@@ -2,8 +2,6 @@ package model
 
 import (
 	"context"
-
-	"github.com/talgat-ruby/interactive-comments-api/pkg/utils"
 )
 
 type DBComment struct {
@@ -248,90 +246,26 @@ type CreateCommentInput struct {
 }
 
 func (m *Model) CreateComment(ctx context.Context, input *CreateCommentInput) error {
-	m.log.InfoContext(ctx, "start InsertComment")
-
-	insertInp := &insertComment{
-		author:  input.Author,
-		content: input.Content,
-	}
-
-	id, err := m.insertComment(ctx, insertInp)
-	if err != nil {
-		return err
-	}
-
-	if input.ParentID != nil && input.Addressee != nil {
-		replyInp := &insertReply{
-			commentID: id,
-			parentID:  input.ParentID,
-			addressee: input.Addressee,
-		}
-		if err := m.insertReply(ctx, replyInp); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-type insertComment struct {
-	author  *string
-	content string
-}
-
-func (m *Model) insertComment(ctx context.Context, input *insertComment) (*int, error) {
-	m.log.InfoContext(ctx, "start InsertComment")
+	m.log.InfoContext(ctx, "start CreateComment")
 
 	sqlStatement := `
-		INSERT INTO comment (author, content)
-		VALUES (?, ?);
+		INSERT INTO comment (author, content, parent_id, addressee)
+		VALUES (?, ?, ?, ?);
 	`
 
-	res, err := m.db.ExecContext(
+	_, err := m.db.ExecContext(
 		ctx,
 		sqlStatement,
-		input.author,
-		input.content,
+		input.Author,
+		input.Content,
+		input.ParentID,
+		input.Addressee,
 	)
 	if err != nil {
-		m.log.ErrorContext(ctx, "fail InsertComment", "error", err)
-		return nil, err
-	}
-
-	id64, err := res.LastInsertId()
-	if err != nil {
-		return nil, err
-	}
-
-	m.log.InfoContext(ctx, "success InsertComment")
-	return utils.ToPtr(int(id64)), nil
-}
-
-type insertReply struct {
-	commentID *int
-	parentID  *int
-	addressee *string
-}
-
-func (m *Model) insertReply(ctx context.Context, input *insertReply) error {
-	m.log.InfoContext(ctx, "start InsertComment")
-
-	sqlStatement := `
-		INSERT INTO reply (comment_id, parent_id, addressee)
-		VALUES (?, ?, ?);
-	`
-
-	if _, err := m.db.ExecContext(
-		ctx,
-		sqlStatement,
-		input.commentID,
-		input.parentID,
-		input.addressee,
-	); err != nil {
-		m.log.ErrorContext(ctx, "fail InsertComment", "error", err)
+		m.log.ErrorContext(ctx, "fail CreateComment", "error", err)
 		return err
 	}
 
-	m.log.InfoContext(ctx, "success InsertComment")
+	m.log.InfoContext(ctx, "success CreateComment")
 	return nil
 }
