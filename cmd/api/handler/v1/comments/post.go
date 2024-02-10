@@ -13,7 +13,7 @@ import (
 )
 
 type PostRequestQuery struct {
-	User *string `query:"user"`
+	User *string `query:"user" validate:"required"`
 }
 
 type PostRequestBody struct {
@@ -35,6 +35,15 @@ func (h *Handler) Add(c echo.Context) error {
 			"error", err,
 		)
 		return c.JSON(http.StatusBadRequest, response.ErrorWithMessage{Error: response.WithMessage{Message: err.Error()}})
+	}
+
+	if validationError := h.postRequestQueryValidationErrors(ctx, reqQuery); validationError != nil {
+		h.log.ErrorContext(
+			ctx,
+			"fail Delete:: validation errors",
+			"path", c.Path(),
+		)
+		return c.JSON(http.StatusBadRequest, response.Error{Error: validationError})
 	}
 
 	reqBody, err := h.postRequestBody(ctx, c)
@@ -70,6 +79,27 @@ func (h *Handler) Add(c echo.Context) error {
 
 	h.log.InfoContext(ctx, "success Add", "path", c.Path())
 	return c.NoContent(http.StatusNoContent)
+}
+
+type postQueryValidationError struct {
+	User *string `json:"user,omitempty"`
+}
+
+func (h *Handler) postRequestQueryValidationErrors(_ context.Context, reqParam *PostRequestQuery) *deleteQueryValidationError {
+	if err := h.validate.Struct(reqParam); err != nil {
+		vErr := new(deleteQueryValidationError)
+
+		for _, err := range err.(validator.ValidationErrors) {
+			switch err.StructField() {
+			case "User":
+				vErr.User = utils.ToPtr("user is invalid")
+			}
+		}
+
+		return vErr
+	}
+
+	return nil
 }
 
 type postValidationError struct {

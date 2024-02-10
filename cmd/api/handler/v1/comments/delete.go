@@ -12,37 +12,17 @@ import (
 	"github.com/talgat-ruby/interactive-comments-api/pkg/utils"
 )
 
-type DeleteRequestQuery struct {
-	User string `query:"user" validate:"required"`
+type DeleteRequestParam struct {
+	ID *int `param:"id" validate:"required,gt=0"`
 }
 
-type DeleteRequestParam struct {
-	ID int `param:"id" validate:"required,gt=0"`
+type DeleteRequestQuery struct {
+	User *string `query:"user" validate:"required"`
 }
 
 func (h *Handler) Delete(c echo.Context) error {
 	ctx := c.Request().Context()
 	h.log.InfoContext(ctx, "start Delete", "path", c.Path())
-
-	reqQuery := new(DeleteRequestQuery)
-	if err := (&echo.DefaultBinder{}).BindQueryParams(c, reqQuery); err != nil {
-		h.log.ErrorContext(
-			ctx,
-			"fail Delete:: body binding error",
-			"path", c.Path(),
-			"error", err,
-		)
-		return c.JSON(http.StatusBadRequest, response.ErrorWithMessage{Error: response.WithMessage{Message: err.Error()}})
-	}
-
-	if validationError := h.deleteRequestQueryValidationErrors(ctx, reqQuery); validationError != nil {
-		h.log.ErrorContext(
-			ctx,
-			"fail Delete:: validation errors",
-			"path", c.Path(),
-		)
-		return c.JSON(http.StatusBadRequest, response.Error{Error: validationError})
-	}
 
 	reqParam := new(DeleteRequestParam)
 	if err := (&echo.DefaultBinder{}).BindPathParams(c, reqParam); err != nil {
@@ -56,6 +36,26 @@ func (h *Handler) Delete(c echo.Context) error {
 	}
 
 	if validationError := h.deleteRequestParamValidationErrors(ctx, reqParam); validationError != nil {
+		h.log.ErrorContext(
+			ctx,
+			"fail Delete:: validation errors",
+			"path", c.Path(),
+		)
+		return c.JSON(http.StatusBadRequest, response.Error{Error: validationError})
+	}
+
+	reqQuery := new(DeleteRequestQuery)
+	if err := (&echo.DefaultBinder{}).BindQueryParams(c, reqQuery); err != nil {
+		h.log.ErrorContext(
+			ctx,
+			"fail Delete:: body binding error",
+			"path", c.Path(),
+			"error", err,
+		)
+		return c.JSON(http.StatusBadRequest, response.ErrorWithMessage{Error: response.WithMessage{Message: err.Error()}})
+	}
+
+	if validationError := h.deleteRequestQueryValidationErrors(ctx, reqQuery); validationError != nil {
 		h.log.ErrorContext(
 			ctx,
 			"fail Delete:: validation errors",
@@ -79,29 +79,8 @@ func (h *Handler) Delete(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-type deleteQueryValidationError struct {
-	User *string `json:"content,omitempty"`
-}
-
-func (h *Handler) deleteRequestQueryValidationErrors(_ context.Context, reqParam *DeleteRequestQuery) *deleteQueryValidationError {
-	if err := h.validate.Struct(reqParam); err != nil {
-		vErr := new(deleteQueryValidationError)
-
-		for _, err := range err.(validator.ValidationErrors) {
-			switch err.StructField() {
-			case "User":
-				vErr.User = utils.ToPtr("user is invalid")
-			}
-		}
-
-		return vErr
-	}
-
-	return nil
-}
-
 type deleteParamValidationError struct {
-	ID *string `json:"content,omitempty"`
+	ID *string `json:"id,omitempty"`
 }
 
 func (h *Handler) deleteRequestParamValidationErrors(_ context.Context, reqParam *DeleteRequestParam) *deleteParamValidationError {
@@ -121,7 +100,28 @@ func (h *Handler) deleteRequestParamValidationErrors(_ context.Context, reqParam
 	return nil
 }
 
-func deleteDBInput(id int, username string) *model.DeleteCommentInput {
+type deleteQueryValidationError struct {
+	User *string `json:"user,omitempty"`
+}
+
+func (h *Handler) deleteRequestQueryValidationErrors(_ context.Context, reqParam *DeleteRequestQuery) *deleteQueryValidationError {
+	if err := h.validate.Struct(reqParam); err != nil {
+		vErr := new(deleteQueryValidationError)
+
+		for _, err := range err.(validator.ValidationErrors) {
+			switch err.StructField() {
+			case "User":
+				vErr.User = utils.ToPtr("user is invalid")
+			}
+		}
+
+		return vErr
+	}
+
+	return nil
+}
+
+func deleteDBInput(id *int, username *string) *model.DeleteCommentInput {
 	inp := new(model.DeleteCommentInput)
 
 	inp.ID = id

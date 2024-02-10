@@ -21,5 +21,6 @@ func v1formsRouter(v1 *echo.Group, db dbT.DB, v *validator.Validate, l *slog.Log
 
 	v1.GET("/comments", h.ReadList)
 	v1.POST("/comments", h.Add)
+	v1.PATCH("/comments/:id", h.Edit)
 	v1.DELETE("/comments/:id", h.Delete)
 }

@@ -281,9 +281,46 @@ func (m *Model) CreateComment(ctx context.Context, input *CreateCommentInput) er
 	return nil
 }
 
+type UpdateCommentInput struct {
+	ID      *int
+	Author  *string
+	Content string
+}
+
+func (m *Model) UpdateComment(ctx context.Context, input *UpdateCommentInput) error {
+	m.log.InfoContext(ctx, "start UpdateComment")
+
+	sqlStatement := `
+		UPDATE comment
+		SET content = ?
+		WHERE id = ? AND author = ?;
+	`
+
+	res, err := m.db.ExecContext(
+		ctx,
+		sqlStatement,
+		input.Content,
+		input.ID,
+		input.Author,
+	)
+	if err != nil {
+		m.log.ErrorContext(ctx, "fail UpdateComment", "error", err)
+		return err
+	}
+
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return fmt.Errorf("no record was update, please verify request")
+	}
+
+	m.log.InfoContext(ctx, "success UpdateComment")
+	return nil
+}
+
 type DeleteCommentInput struct {
-	ID       int
-	Username string
+	ID       *int
+	Username *string
 }
 
 func (m *Model) DeleteComment(ctx context.Context, input *DeleteCommentInput) error {
