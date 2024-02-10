@@ -307,7 +307,50 @@ When comment was deleted by NOT owner.
 }
 ```
 
-Rest are comming soon ....
+`POST` `/likes?user=<username>`
+
+Body
+
+```json
+{
+  "commentId": <number>, // valid comment id
+  "rate": <number> // 1 - like, 0 - empty, -1 - dislike
+}
+```
+
+Will create like or if a combination of user & commentId exists just updates. Only NON owner can like comment.
+
+**Response**
+
+Sample Success Response for
+
+```bash
+curl -X POST 'http://localhost:8081/api/v1/likes?user=ramsesmiron' \
+   -H 'Content-Type: application/json' \
+    -d '{"rate": -1, "commentId": 4}'
+```
+
+`204 No Content`
+
+Sample Error Response for
+
+```bash
+ curl -X POST 'http://localhost:8081/api/v1/likes?user=ramsesmiron' \
+    -H 'Content-Type: application/json' \
+    -d '{"rate": 14}'
+```
+
+When comment id is invalid.
+
+`400`
+
+```json
+{
+  "error": {
+    "message":"rate is invalid"
+  }
+}
+```
 
 ## License
 
