@@ -252,8 +252,10 @@ func (m *Model) CreateComment(ctx context.Context, input *CreateCommentInput) er
 	sqlStatement := `
 		INSERT INTO comment (author, content, parent_id, addressee)
 		SELECT ?, ?, ?, ?
-		WHERE EXISTS (
-			SELECT * FROM comment c WHERE c.id = ? AND c.parent_id IS NULL
+		WHERE ? IS NULL OR (
+		    ? IS NOT NULL AND EXISTS (
+				SELECT * FROM comment c WHERE c.id = ? AND c.parent_id IS NULL
+			)
 		);
 	`
 
@@ -264,6 +266,8 @@ func (m *Model) CreateComment(ctx context.Context, input *CreateCommentInput) er
 		input.Content,
 		input.ParentID,
 		input.Addressee,
+		input.ParentID,
+		input.ParentID,
 		input.ParentID,
 	)
 	if err != nil {
